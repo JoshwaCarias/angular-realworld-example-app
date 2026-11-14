@@ -1,0 +1,51 @@
+name: SonarQube Cloud
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-analyze:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node for Angular 11
+        uses: actions/setup-node@v4
+        with:
+          node-version: '14.21.3'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build production application
+        run: npm run build
+      - name: Run unit tests with coverage
+        run: npm test -- --watch=false --browsers=ChromeHeadless --code-coverage --progress=false
+      - name: Set up current Node for analysis
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: SonarQube Cloud analysis
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: SonarSource/sonarqube-scan-action@v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=JoshwaCarias_angular-realworld-example-app
+            -Dsonar.organization=joshwacarias
+            -Dsonar.sources=src
+            -Dsonar.tests=src
+            -Dsonar.test.inclusions=**/*.spec.ts
+            -Dsonar.exclusions=**/*.spec.ts
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.sourceEncoding=UTF-8
